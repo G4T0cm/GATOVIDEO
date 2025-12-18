@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse
 import uuid
 import os
 import subprocess
@@ -7,10 +7,9 @@ import requests
 
 app = FastAPI()
 
-video_template = "template.mp4"  # Tu video base
+video_template = "template.mp4"
 output_dir = "static/videos"
 
-# Crear carpeta si no existe
 os.makedirs(output_dir, exist_ok=True)
 
 @app.get("/v/{url:path}")
@@ -36,9 +35,9 @@ def video_from_url(url: str):
             output_path
         ], check=True)
 
-        # Devolver URL pública terminada en .mp4
+        # Redirigir al archivo .mp4 final
         video_url = f"https://gatovideo.onrender.com/static/videos/{video_id}.mp4"
-        return JSONResponse({"url": video_url})
+        return RedirectResponse(video_url, status_code=307)
 
     except Exception as e:
         return {"error": str(e)}
