@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Path
+from fastapi.responses import FileResponse
 import uuid
 import os
 import subprocess
@@ -7,24 +7,21 @@ import requests
 
 app = FastAPI()
 
-video_template = "template.mp4"  # Tu video base
+video_template = "template.mp4"
 output_dir = "static/videos"
-
-# Crear carpeta si no existe
 os.makedirs(output_dir, exist_ok=True)
 
-# Servir archivos estáticos
-from fastapi.staticfiles import StaticFiles
-app.mount("/static", StaticFiles(directory="static"), name="static")
+@app.get("/v/{image_url:path}")
+async def generate_video(image_url: str = Path(...)):
+    import urllib.parse
+    image_url = urllib.parse.unquote(image_url)
 
-@app.post("/generate/")
-async def generate_video(image_url: str = Query(...)):
     # Descargar imagen
     img_id = str(uuid.uuid4())
     img_path = f"/tmp/{img_id}.png"
     response = requests.get(image_url)
     if response.status_code != 200:
-        return JSONResponse({"error": "No se pudo descargar la imagen"}, status_code=400)
+        return {"error": "No se pudo descargar la imagen"}
     with open(img_path, "wb") as f:
         f.write(response.content)
 
@@ -41,6 +38,5 @@ async def generate_video(image_url: str = Query(...)):
         output_path
     ], check=True)
 
-    return JSONResponse({
-        "video_url": f"https://gatovideo.onrender.com/static/videos/{video_id}.mp4"
-    })
+    # Devolver el archivo directamente para Discord
+    return FileResponse(output_path, media_type="video/mp4", filename=f"{video_id}.mp4")
