@@ -1,40 +1,39 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import os
-import uuid
-import hashlib
 import subprocess
+import uuid
 import requests
 
 app = FastAPI()
 
+# Configuración
 video_template = "template.mp4"  # Tu video base
 output_dir = "static/videos"
 os.makedirs(output_dir, exist_ok=True)
 
-def hash_url(url: str) -> str:
-    """Crea un hash corto para usar como nombre de archivo único."""
-    return hashlib.md5(url.encode()).hexdigest()
-
-@app.get("/v/{url:path}")
-def video_from_url(url: str):
+@app.get("/{folder}/{image_name}.mp4")
+def generate_video(folder: str, image_name: str):
     try:
-        # Nombre del video basado en hash de la URL
-        video_name = f"{hash_url(url)}.mp4"
-        output_path = os.path.join(output_dir, video_name)
+        # Nombre y ruta del video generado
+        video_id = f"{folder}_{image_name}.mp4"
+        output_path = os.path.join(output_dir, video_id)
 
-        # Si el video ya existe, devolverlo directamente
+        # Si ya existe, lo devolvemos directamente
         if os.path.exists(output_path):
             return FileResponse(output_path, media_type="video/mp4")
 
-        # Descargar la imagen
+        # URL de la imagen original en Mudae
+        img_url = f"https://mudae.net/uploads/{folder}/{image_name}.png"
         img_path = f"/tmp/{uuid.uuid4()}.png"
-        resp = requests.get(url)
+
+        # Descargar imagen
+        resp = requests.get(img_url)
         resp.raise_for_status()
         with open(img_path, "wb") as f:
             f.write(resp.content)
 
-        # Generar el video con FFmpeg
+        # Generar video con FFmpeg
         subprocess.run([
             "ffmpeg",
             "-i", video_template,
@@ -44,8 +43,10 @@ def video_from_url(url: str):
             output_path
         ], check=True)
 
-        # Devolver el archivo generado
+        # Devolver video
         return FileResponse(output_path, media_type="video/mp4")
 
+    except requests.HTTPError:
+        return JSONResponse({"error": "Imagen no encontrada en Mudae"})
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e)})
