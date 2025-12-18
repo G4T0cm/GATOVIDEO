@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 import uuid
 import os
 import subprocess
@@ -36,8 +36,9 @@ def video_from_url(url: str):
             output_path
         ], check=True)
 
-        # Devolver el archivo directamente
-        return FileResponse(output_path, media_type="video/mp4")
+        # Devolver URL pública terminada en .mp4
+        video_url = f"https://gatovideo.onrender.com/static/videos/{video_id}.mp4"
+        return JSONResponse({"url": video_url})
 
     except Exception as e:
         return {"error": str(e)}
