@@ -1,50 +1,43 @@
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 import uuid
 import os
 import subprocess
-import aiohttp
-import shutil
+import requests
 
 app = FastAPI()
 
-video_template = "template.mp4"  # tu video base
+video_template = "template.mp4"  # Tu video base
 output_dir = "static/videos"
 
 # Crear carpeta si no existe
 os.makedirs(output_dir, exist_ok=True)
 
-@app.get("/v/{image_url:path}")
-async def generate_video(image_url: str):
-    # Descargar la imagen de la URL
-    img_id = str(uuid.uuid4())
-    img_path = f"/tmp/{img_id}.png"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(image_url) as resp:
-            if resp.status != 200:
-                return {"error": "No se pudo descargar la imagen"}
-            with open(img_path, "wb") as f:
-                f.write(await resp.read())
+@app.get("/v/{url:path}")
+def video_from_url(url: str):
+    try:
+        # Descargar la imagen remota
+        img_id = str(uuid.uuid4())
+        img_path = f"/tmp/{img_id}.png"
+        resp = requests.get(url)
+        resp.raise_for_status()
+        with open(img_path, "wb") as f:
+            f.write(resp.content)
 
-    # Generar video
-    video_id = str(uuid.uuid4())
-    output_path = os.path.join(output_dir, f"{video_id}.mp4")
+        # Generar video
+        video_id = str(uuid.uuid4())
+        output_path = os.path.join(output_dir, f"{video_id}.mp4")
+        subprocess.run([
+            "ffmpeg",
+            "-i", video_template,
+            "-i", img_path,
+            "-filter_complex", "overlay=x=610:y=365:enable='between(t,3.02,3.14)'",
+            "-c:a", "copy",
+            output_path
+        ], check=True)
 
-    subprocess.run([
-        "ffmpeg",
-        "-i", video_template,
-        "-i", img_path,
-        "-filter_complex", "overlay=x=610:y=365:enable='between(t,3.02,3.14)'",
-        "-c:a", "copy",
-        "-y",  # sobrescribir si existe
-        output_path
-    ], check=True)
+        # Devolver el archivo directamente
+        return FileResponse(output_path, media_type="video/mp4")
 
-    # Limpiar imagen temporal
-    os.remove(img_path)
-
-    # Devolver el video directamente
-    return StreamingResponse(
-        open(output_path, "rb"),
-        media_type="video/mp4"
-    )
+    except Exception as e:
+        return {"error": str(e)}
